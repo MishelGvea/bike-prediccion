@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Predicción de Renta de Bicicletas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+        }
+        .container {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #2E75B6;
+            font-size: 22px;
+        }
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            background-color: #2E75B6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1F5C99;
+        }
+        #resultado {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #EBF2FA;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #1F5C99;
+            display: none;
+        }
+        #resultado.error {
+            background-color: #FBE2E2;
+            color: #C0392B;
+        }
+        .error-msg {
+            color: #C0392B;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+        input.invalido {
+            border-color: #C0392B;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Predicción de Renta de Bicicletas</h1>
+    <form id="formPrediccion">
+
+        <label for="hr">Hora del día (0-23)</label>
+        <input type="number" id="hr" min="0" max="23" value="8" required>
+        <span class="error-msg" id="error-hr">Debe ser un número entero entre 0 y 23</span>
+
+        <label for="mnth">Mes (1-12)</label>
+        <input type="number" id="mnth" min="1" max="12" value="1" required>
+        <span class="error-msg" id="error-mnth">Debe ser un número entero entre 1 y 12</span>
+
+        <label for="season">Temporada</label>
+        <select id="season">
+            <option value="1">Primavera</option>
+            <option value="2">Verano</option>
+            <option value="3">Otoño</option>
+            <option value="4">Invierno</option>
+        </select>
+
+        <label for="yr">Año</label>
+        <select id="yr">
+            <option value="0">2011</option>
+            <option value="1">2012</option>
+        </select>
+
+        <label for="weathersit">Clima</label>
+        <select id="weathersit">
+            <option value="1">Despejado / Pocas nubes</option>
+            <option value="2">Niebla / Nublado</option>
+            <option value="3">Lluvia o nieve ligera</option>
+            <option value="4">Lluvia o nieve fuerte</option>
+        </select>
+
+        <label for="temp">Temperatura normalizada (0 a 1)</label>
+        <input type="number" id="temp" step="0.01" min="0" max="1" value="0.24" required>
+        <span class="error-msg" id="error-temp">Debe ser un número entre 0 y 1</span>
+
+        <label for="atemp">Sensación térmica normalizada (0 a 1)</label>
+        <input type="number" id="atemp" step="0.01" min="0" max="1" value="0.28" required>
+        <span class="error-msg" id="error-atemp">Debe ser un número entre 0 y 1</span>
+
+        <label for="hum">Humedad normalizada (0 a 1)</label>
+        <input type="number" id="hum" step="0.01" min="0" max="1" value="0.81" required>
+        <span class="error-msg" id="error-hum">Debe ser un número entre 0 y 1</span>
+
+        <label for="windspeed">Velocidad del viento normalizada (0 a 1)</label>
+        <input type="number" id="windspeed" step="0.01" min="0" max="1" value="0" required>
+        <span class="error-msg" id="error-windspeed">Debe ser un número entre 0 y 1</span>
+
+        <button type="submit">Predecir</button>
+    </form>
+
+    <div id="resultado"></div>
+</div>
+
+<script>
+    // Reglas de validación por campo: [min, max, debeSerEntero]
+    const reglas = {
+        hr:         { min: 0, max: 23, entero: true },
+        mnth:       { min: 1, max: 12, entero: true },
+        temp:       { min: 0, max: 1,  entero: false },
+        atemp:      { min: 0, max: 1,  entero: false },
+        hum:        { min: 0, max: 1,  entero: false },
+        windspeed:  { min: 0, max: 1,  entero: false }
+    };
+
+    function validarCampo(id) {
+        const input = document.getElementById(id);
+        const errorMsg = document.getElementById('error-' + id);
+        const regla = reglas[id];
+        const valor = input.value.trim();
+
+        // vacío
+        if (valor === '') {
+            mostrarError(input, errorMsg, 'Este campo es obligatorio');
+            return null;
+        }
+
+        const numero = Number(valor);
+
+        // no es número válido
+        if (isNaN(numero)) {
+            mostrarError(input, errorMsg, 'Debe ser un número válido');
+            return null;
+        }
+
+        // debe ser entero
+        if (regla.entero && !Number.isInteger(numero)) {
+            mostrarError(input, errorMsg, 'Debe ser un número entero');
+            return null;
+        }
+
+        // fuera de rango
+        if (numero < regla.min || numero > regla.max) {
+            mostrarError(input, errorMsg, `Debe estar entre ${regla.min} y ${regla.max}`);
+            return null;
+        }
+
+        ocultarError(input, errorMsg);
+        return numero;
+    }
+
+    function mostrarError(input, errorMsg, texto) {
+        input.classList.add('invalido');
+        errorMsg.textContent = texto;
+        errorMsg.style.display = 'block';
+    }
+
+    function ocultarError(input, errorMsg) {
+        input.classList.remove('invalido');
+        errorMsg.style.display = 'none';
+    }
+
+    // Validar en tiempo real al salir de cada campo
+    Object.keys(reglas).forEach(id => {
+        document.getElementById(id).addEventListener('blur', () => validarCampo(id));
+    });
+
+    document.getElementById('formPrediccion').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const resultadoDiv = document.getElementById('resultado');
+
+        // Validar todos los campos numéricos antes de enviar
+        const valores = {};
+        let formularioValido = true;
+
+        for (const id of Object.keys(reglas)) {
+            const valor = validarCampo(id);
+            if (valor === null) {
+                formularioValido = false;
+            } else {
+                valores[id] = valor;
+            }
+        }
+
+        if (!formularioValido) {
+            resultadoDiv.className = 'error';
+            resultadoDiv.style.display = 'block';
+            resultadoDiv.textContent = 'Corrige los campos marcados antes de continuar';
+            return;
+        }
+
+        const datos = {
+            hr: valores.hr,
+            mnth: valores.mnth,
+            season: parseInt(document.getElementById('season').value),
+            yr: parseInt(document.getElementById('yr').value),
+            weathersit: parseInt(document.getElementById('weathersit').value),
+            temp: valores.temp,
+            atemp: valores.atemp,
+            hum: valores.hum,
+            windspeed: valores.windspeed
+        };
+
+        resultadoDiv.className = '';
+        resultadoDiv.style.display = 'block';
+        resultadoDiv.textContent = 'Calculando...';
+
+        try {
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            });
+
+            if (!response.ok) {
+                throw new Error('Respuesta no válida del servidor');
+            }
+
+            const data = await response.json();
+
+            if (data.prediccion_cnt !== undefined) {
+                resultadoDiv.className = '';
+                resultadoDiv.textContent = `Bicicletas estimadas: ${Math.round(data.prediccion_cnt)}`;
+            } else {
+                resultadoDiv.className = 'error';
+                resultadoDiv.textContent = 'Error: ' + JSON.stringify(data);
+            }
+        } catch (error) {
+            resultadoDiv.className = 'error';
+            resultadoDiv.textContent = 'Error al conectar con el servidor';
+        }
+    });
+</script>
+
+</body>
+</html>
